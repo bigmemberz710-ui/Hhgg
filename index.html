@@ -584,7 +584,7 @@ function loadDashboard() {
       <td>${a.status==='pending'?`<button class="atn-btn atn-ok" onclick="updateStatus(${a.id},'approved')">Approve</button><button class="atn-btn atn-no" onclick="updateStatus(${a.id},'rejected')">Reject</button>`:'—'}</td>
     </tr>
     <tr><td colspan="6" style="padding:0 1rem 1rem;border-bottom:1px solid var(--border);">
-      \${a.idPhoto?\`<div style="display:flex;align-items:center;gap:.8rem;"><img src="\${a.idPhoto}" style="max-width:120px;max-height:80px;object-fit:cover;border:1px solid rgba(201,168,76,0.3);" alt="ID"/><span style="font-family:'Cinzel',serif;font-size:.55rem;letter-spacing:.12em;color:var(--gold-dim);text-transform:uppercase;">ID Uploaded</span></div>\`:'<span style="font-style:italic;color:var(--text-dim);font-size:.85rem;">No ID uploaded</span>'}
+      ${a.idPhoto ? '<img src="'+a.idPhoto+'" style="max-width:120px;max-height:80px;object-fit:cover;border:1px solid rgba(201,168,76,0.3);" alt="ID"/>' : '<em style="color:var(--text-dim);font-size:.85rem;">No ID uploaded</em>'}
     </td></tr>`).join('');
   el.innerHTML=`<div style="overflow-x:auto;"><table class="app-table"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Address</th><th>Occupation</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
@@ -703,7 +703,7 @@ document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click
 function openInquiry(name){document.getElementById('inquiry-title').textContent='Enquire — '+name;openModal('modal-inquiry');}
 function submitInquiry(){
   const n=document.getElementById('inq-name').value.trim();
-  const c=document.getElementById Im('inq-contact').value.trim();
+  const c=document.getElementById('inq-contact').value.trim();
   if(!n||!c){showToast('Please provide your name and contact');return;}
   closeModal('modal-inquiry');
   ['inq-name','inq-contact','inq-msg'].forEach(id=>document.getElementById(id).value='');
