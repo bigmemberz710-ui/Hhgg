@@ -731,7 +731,7 @@ window.uploadGalleryPhoto = async function() {
     formData.append("upload_preset", CLOUDINARY_PRESET);
     showProgress(10);
     const res = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`,
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`,
       { method: "POST", body: formData }
     );
     showProgress(80);
@@ -767,7 +767,7 @@ window.uploadGalleryVideo = async function() {
     formData.append("upload_preset", CLOUDINARY_PRESET);
     showProgress(10);
     const res = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/video/upload`,
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`,
       { method: "POST", body: formData }
     );
     showProgress(80);
