@@ -721,29 +721,19 @@ window.uploadGalleryPhoto = async function() {
   const file = document.getElementById("gallery-photo-input").files[0];
   if (!file) return;
   const caption = document.getElementById("gallery-caption-input").value.trim();
-  setUploadStatus("Uploading photo…", true);
-  showProgress(0);
-
+  setUploadStatus("Processing photo…", true);
+  showProgress(20);
   try {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("upload_preset", CLOUDINARY_PRESET);
-    showProgress(10);
-    const res = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`,
-      { method: "POST", body: formData }
-    );
-    showProgress(80);
-    if (!res.ok) { throw new Error("Cloudinary " + res.status); }
-    const data = await res.json();
+    const dataUrl = await compressImage(file, 1000, 0.80);
+    showProgress(70);
     await addDoc(collection(db, "gallery"), {
-      type: "photo", url: data.secure_url, caption, createdAt: serverTimestamp()
+      type: "photo", url: dataUrl, caption, createdAt: serverTimestamp()
     });
     document.getElementById("gallery-caption-input").value = "";
     document.getElementById("gallery-photo-input").value = "";
     setUploadStatus("Photo added! ✦", false);
     showProgress(100);
-    setTimeout(() => hideProgress(), 1500);
+    setTimeout(() => hideProgress(), 1200);
     showToast("Photo added to gallery ✦");
   } catch(err) {
     console.error(err);
@@ -752,34 +742,54 @@ window.uploadGalleryPhoto = async function() {
   }
 };
 
-// Upload video → Cloudinary → save URL in Firebase
+function compressImage(file, maxW, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = e => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let w = img.width, h = img.height;
+        if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 window.uploadGalleryVideo = async function() {
   const file = document.getElementById("gallery-video-input").files[0];
   if (!file) return;
   const caption = document.getElementById("gallery-caption-input").value.trim();
-  setUploadStatus("Uploading video to Cloudinary…", true);
-  showProgress(0);
-
+  const mb = file.size / 1024 / 1024;
+  if (mb > 15) {
+    setUploadStatus("Video too large — keep clips under 15MB", false);
+    return;
+  }
+  setUploadStatus("Reading video… please wait", true);
+  showProgress(10);
   try {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("upload_preset", CLOUDINARY_PRESET);
-    showProgress(10);
-    const res = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`,
-      { method: "POST", body: formData }
-    );
-    showProgress(80);
-    if (!res.ok) { throw new Error("Cloudinary " + res.status); }
-    const data = await res.json();
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = e => resolve(e.target.result);
+      reader.readAsDataURL(file);
+    });
+    showProgress(70);
     await addDoc(collection(db, "gallery"), {
-      type: "video", url: data.secure_url, caption, createdAt: serverTimestamp()
+      type: "video", url: dataUrl, caption, createdAt: serverTimestamp()
     });
     document.getElementById("gallery-caption-input").value = "";
     document.getElementById("gallery-video-input").value = "";
     setUploadStatus("Video added! ✦", false);
     showProgress(100);
-    setTimeout(() => hideProgress(), 1500);
+    setTimeout(() => hideProgress(), 1200);
     showToast("Video added to gallery ✦");
   } catch(err) {
     console.error(err);
