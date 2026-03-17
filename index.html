@@ -725,45 +725,32 @@ window.uploadGalleryPhoto = async function() {
   setUploadStatus("Uploading photo…", true);
   showProgress(0);
 
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("upload_preset", CLOUDINARY_PRESET);
-
-  const xhr = new XMLHttpRequest();
-  xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`);
-
-  xhr.upload.onprogress = (e) => {
-    if (e.lengthComputable) showProgress(Math.round(e.loaded/e.total*100));
-  };
-
-  xhr.onload = async function() {
-    if (xhr.status === 200) {
-      const data = JSON.parse(xhr.responseText);
-      try {
-        await addDoc(collection(db, "gallery"), {
-          type: "photo",
-          url: data.secure_url,
-          caption,
-          createdAt: serverTimestamp()
-        });
-        document.getElementById("gallery-caption-input").value = "";
-        document.getElementById("gallery-photo-input").value = "";
-        setUploadStatus("Photo added! ✦", false);
-        showProgress(100);
-        setTimeout(() => hideProgress(), 1500);
-        showToast("Photo added to gallery ✦");
-      } catch(err) {
-        setUploadStatus("Firebase error — try again", false);
-        console.error(err);
-      }
-    } else {
-      console.error("Cloudinary error:", xhr.status, xhr.responseText);
-      setUploadStatus("Upload failed — check preset name", false);
-      hideProgress();
-    }
-  };
-  xhr.onerror = () => { setUploadStatus("Network error — check connection", false); hideProgress(); };
-  xhr.send(formData);
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", CLOUDINARY_PRESET);
+    showProgress(10);
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`,
+      { method: "POST", body: formData }
+    );
+    showProgress(80);
+    if (!res.ok) { throw new Error("Cloudinary " + res.status); }
+    const data = await res.json();
+    await addDoc(collection(db, "gallery"), {
+      type: "photo", url: data.secure_url, caption, createdAt: serverTimestamp()
+    });
+    document.getElementById("gallery-caption-input").value = "";
+    document.getElementById("gallery-photo-input").value = "";
+    setUploadStatus("Photo added! ✦", false);
+    showProgress(100);
+    setTimeout(() => hideProgress(), 1500);
+    showToast("Photo added to gallery ✦");
+  } catch(err) {
+    console.error(err);
+    setUploadStatus("Error: " + err.message, false);
+    hideProgress();
+  }
 };
 
 // Upload video → Cloudinary → save URL in Firebase
@@ -774,44 +761,32 @@ window.uploadGalleryVideo = async function() {
   setUploadStatus("Uploading video to Cloudinary…", true);
   showProgress(0);
 
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("upload_preset", CLOUDINARY_PRESET);
-
-  const xhr = new XMLHttpRequest();
-  xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/video/upload`);
-
-  xhr.upload.onprogress = (e) => {
-    if (e.lengthComputable) showProgress(Math.round(e.loaded/e.total*100));
-  };
-
-  xhr.onload = async function() {
-    if (xhr.status === 200) {
-      const data = JSON.parse(xhr.responseText);
-      try {
-        await addDoc(collection(db, "gallery"), {
-          type: "video",
-          url: data.secure_url,
-          caption,
-          createdAt: serverTimestamp()
-        });
-        document.getElementById("gallery-caption-input").value = "";
-        document.getElementById("gallery-video-input").value = "";
-        setUploadStatus("Video added! ✦", false);
-        showProgress(100);
-        setTimeout(() => hideProgress(), 1500);
-        showToast("Video added to gallery ✦");
-      } catch(err) {
-        setUploadStatus("Cloudinary OK but Firebase error", false);
-        console.error(err);
-      }
-    } else {
-      setUploadStatus("Upload failed — try again", false);
-      hideProgress();
-    }
-  };
-  xhr.onerror = () => { setUploadStatus("Network error", false); hideProgress(); };
-  xhr.send(formData);
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", CLOUDINARY_PRESET);
+    showProgress(10);
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/video/upload`,
+      { method: "POST", body: formData }
+    );
+    showProgress(80);
+    if (!res.ok) { throw new Error("Cloudinary " + res.status); }
+    const data = await res.json();
+    await addDoc(collection(db, "gallery"), {
+      type: "video", url: data.secure_url, caption, createdAt: serverTimestamp()
+    });
+    document.getElementById("gallery-caption-input").value = "";
+    document.getElementById("gallery-video-input").value = "";
+    setUploadStatus("Video added! ✦", false);
+    showProgress(100);
+    setTimeout(() => hideProgress(), 1500);
+    showToast("Video added to gallery ✦");
+  } catch(err) {
+    console.error(err);
+    setUploadStatus("Error: " + err.message, false);
+    hideProgress();
+  }
 };
 
 window.deleteGalleryItem = async function(docId) {
