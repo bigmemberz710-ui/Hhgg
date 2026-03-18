@@ -345,25 +345,30 @@ select { cursor: pointer; }
       <div class="admin-upload-bar" id="admin-upload-bar">
         <div style="font-family:'Cinzel',serif;font-size:0.7rem;letter-spacing:0.2em;color:var(--gold);text-transform:uppercase;margin-bottom:1rem;">Add to Gallery</div>
         <div class="upload-row">
+          <div class="upload-field" style="flex:2;min-width:200px;">
+            <label>Google Drive Link *</label>
+            <input type="text" id="gallery-link-input" placeholder="Paste Google Drive share link…"/>
+          </div>
           <div class="upload-field">
             <label>Caption (optional)</label>
             <input type="text" id="gallery-caption-input" placeholder="Add a caption…"/>
           </div>
-          <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
-            <label style="font-family:Cinzel,serif;font-size:0.6rem;letter-spacing:0.15em;color:var(--gold);text-transform:uppercase;display:flex;align-items:center;gap:0.4rem;cursor:pointer;border:1px solid var(--gold);padding:0.6rem 1rem;">
-              <input type="file" id="gallery-photo-input" accept="image/*" style="display:none" onchange="uploadGalleryPhoto()"/>
-              📷 Photo
-            </label>
-            <label style="font-family:Cinzel,serif;font-size:0.6rem;letter-spacing:0.15em;color:var(--gold);text-transform:uppercase;display:flex;align-items:center;gap:0.4rem;cursor:pointer;border:1px solid var(--gold);padding:0.6rem 1rem;">
-              <input type="file" id="gallery-video-input" accept="video/*" style="display:none" onchange="uploadGalleryVideo()"/>
-              🎬 Video
-            </label>
+          <div class="upload-field" style="min-width:120px;">
+            <label>Type</label>
+            <select id="gallery-type-input" style="background:var(--deep);border:1px solid rgba(201,168,76,0.14);color:var(--text);font-family:'Cormorant Garamond',serif;font-size:1rem;padding:0.6rem 0.8rem;width:100%;appearance:none;">
+              <option value="photo">📷 Photo</option>
+              <option value="video">🎬 Video</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="btn btn-sm" onclick="addGalleryLink()" style="white-space:nowrap;"><span>+ Add</span></button>
           </div>
         </div>
-        <div class="upload-progress" id="upload-progress">
-          <div class="upload-progress-bar" id="upload-progress-bar"></div>
+        <div id="upload-status" style="font-size:0.82rem;color:var(--text-dim);font-style:italic;margin-top:0.8rem;"></div>
+        <div style="margin-top:0.8rem;padding:0.7rem;background:rgba(201,168,76,0.05);border:1px solid var(--border);font-size:0.8rem;color:var(--text-dim);line-height:1.6;">
+          <strong style="color:var(--gold-dim);font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.15em;text-transform:uppercase;">How to share from Google Drive:</strong><br/>
+          Open Google Drive → tap file → Share → Change to "Anyone with the link" → Copy link → paste above
         </div>
-        <div id="upload-status" style="font-size:0.82rem;color:var(--text-dim);font-style:italic;margin-top:0.5rem;"></div>
       </div>
     </div>
   </div>
@@ -395,7 +400,7 @@ select { cursor: pointer; }
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, query, orderBy, onSnapshot, serverTimestamp }
+import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, onSnapshot, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -408,7 +413,7 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db  = getFirestore(app);
+const db = getFirestore(app);
 
 // ── CODES ──
 const MEMBER_CODE = "Membersx91";
@@ -665,9 +670,10 @@ function renderGallery() {
   // Media
   let mediaHTML = "";
   if (item.type === "photo") {
-    mediaHTML = `<img src="${item.url}" alt="${esc(item.caption||"")}" style="max-width:100%;max-height:75vh;object-fit:contain;"/>`;
+    mediaHTML = `<img src="${item.url}" alt="${esc(item.caption||"")}" style="max-width:100%;max-height:75vh;object-fit:contain;" crossorigin="anonymous"/>`;
   } else {
-    mediaHTML = `<video src="${item.url}" style="max-width:100%;max-height:75vh;object-fit:contain;" controls playsinline></video>`;
+    // Google Drive video uses iframe preview
+    mediaHTML = `<iframe src="${item.url}" style="width:100%;height:55vw;max-height:420px;border:none;" allowfullscreen allow="autoplay"></iframe>`;
   }
 
   const delBtn = isAdmin
@@ -719,93 +725,57 @@ window.galleryGoTo = function(i) {
   renderGallery();
 };
 
-// Upload photo → compress → store directly in Firebase
-window.uploadGalleryPhoto = async function() {
-  const file = document.getElementById("gallery-photo-input").files[0];
-  if (!file) return;
+// Add gallery item via Google Drive link
+window.addGalleryLink = async function() {
+  const rawLink = document.getElementById("gallery-link-input").value.trim();
   const caption = document.getElementById("gallery-caption-input").value.trim();
-  setUploadStatus("Processing photo…", true);
-  showProgress(20);
+  const type    = document.getElementById("gallery-type-input").value;
+
+  if (!rawLink) { setUploadStatus("Please paste a Google Drive link", false); return; }
+
+  // Convert Google Drive share link to direct embed/view URL
+  const url = convertDriveLink(rawLink, type);
+  if (!url) { setUploadStatus("Invalid Google Drive link — copy the share link from Drive", false); return; }
+
+  setUploadStatus("Adding to gallery…", true);
   try {
-    const dataUrl = await compressImage(file, 1000, 0.80);
-    showProgress(70);
     await addDoc(collection(db, "gallery"), {
-      type: "photo", url: dataUrl, caption, createdAt: serverTimestamp()
+      type, url, caption, createdAt: serverTimestamp()
     });
+    document.getElementById("gallery-link-input").value = "";
     document.getElementById("gallery-caption-input").value = "";
-    document.getElementById("gallery-photo-input").value = "";
-    setUploadStatus("Photo added! ✦", false);
-    showProgress(100);
-    setTimeout(() => hideProgress(), 1200);
-    showToast("Photo added to gallery ✦");
+    setUploadStatus("Added to gallery! ✦", false);
+    showToast("Added to gallery ✦");
   } catch(err) {
     console.error(err);
     setUploadStatus("Error: " + err.message, false);
-    hideProgress();
   }
 };
 
-function compressImage(file, maxW, quality) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = reject;
-    reader.onload = e => {
-      const img = new Image();
-      img.onerror = reject;
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        let w = img.width, h = img.height;
-        if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
-        canvas.width = w; canvas.height = h;
-        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
+function convertDriveLink(link, type) {
+  // Extract file ID from various Google Drive URL formats
+  let fileId = null;
+  const patterns = [
+    /\/file\/d\/([a-zA-Z0-9_-]+)/,
+    /id=([a-zA-Z0-9_-]+)/,
+    /\/d\/([a-zA-Z0-9_-]+)/
+  ];
+  for (const p of patterns) {
+    const m = link.match(p);
+    if (m) { fileId = m[1]; break; }
+  }
+  if (!fileId) return null;
+  if (type === "video") {
+    return `https://drive.google.com/file/d/${fileId}/preview`;
+  } else {
+    return `https://drive.google.com/uc?export=view&id=${fileId}`;
+  }
 }
-
-window.uploadGalleryVideo = async function() {
-  const file = document.getElementById("gallery-video-input").files[0];
-  if (!file) return;
-  const caption = document.getElementById("gallery-caption-input").value.trim();
-  const mb = file.size / 1024 / 1024;
-  if (mb > 15) {
-    setUploadStatus("Video too large — keep clips under 15MB", false);
-    return;
-  }
-  setUploadStatus("Reading video… please wait", true);
-  showProgress(10);
-  try {
-    const dataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = reject;
-      reader.onload = e => resolve(e.target.result);
-      reader.readAsDataURL(file);
-    });
-    showProgress(70);
-    await addDoc(collection(db, "gallery"), {
-      type: "video", url: dataUrl, caption, createdAt: serverTimestamp()
-    });
-    document.getElementById("gallery-caption-input").value = "";
-    document.getElementById("gallery-video-input").value = "";
-    setUploadStatus("Video added! ✦", false);
-    showProgress(100);
-    setTimeout(() => hideProgress(), 1200);
-    showToast("Video added to gallery ✦");
-  } catch(err) {
-    console.error(err);
-    setUploadStatus("Error: " + err.message, false);
-    hideProgress();
-  }
-};
 
 window.deleteGalleryItem = async function(docId) {
   if (currentRole !== "admin") return;
   if (!confirm("Remove this from the gallery?")) return;
   try {
-    const { deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
     await deleteDoc(doc(db, "gallery", docId));
     showToast("Removed from gallery");
   } catch(err) {
