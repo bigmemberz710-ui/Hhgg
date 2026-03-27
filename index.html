@@ -346,8 +346,8 @@ select { cursor: pointer; }
         <div style="font-family:'Cinzel',serif;font-size:0.7rem;letter-spacing:0.2em;color:var(--gold);text-transform:uppercase;margin-bottom:1rem;">Add to Gallery</div>
         <div class="upload-row">
           <div class="upload-field" style="flex:2;min-width:200px;">
-            <label>Google Drive Link *</label>
-            <input type="text" id="gallery-link-input" placeholder="Paste Google Drive share link…"/>
+            <label>Image / Video Link *</label>
+            <input type="text" id="gallery-link-input" placeholder="Imgur link for photos · YouTube link for videos…"/>
           </div>
           <div class="upload-field">
             <label>Caption (optional)</label>
@@ -365,6 +365,21 @@ select { cursor: pointer; }
           </div>
         </div>
         <div id="upload-status" style="font-size:0.82rem;color:var(--text-dim);font-style:italic;margin-top:0.8rem;"></div>
+        <div style="margin-top:0.8rem;padding:0.8rem;background:rgba(201,168,76,0.05);border:1px solid var(--border);">
+          <p style="font-family:'Cinzel',serif;font-size:0.58rem;letter-spacing:0.15em;color:var(--gold-dim);text-transform:uppercase;margin-bottom:0.6rem;">How to add media:</p>
+          <p style="font-size:0.82rem;color:var(--text-dim);line-height:1.9;">
+            <strong style="color:var(--gold-dim);">📷 PHOTOS — use Imgur:</strong><br>
+            1. Go to <strong>imgur.com</strong> in Safari<br>
+            2. Tap New Post → upload your photo<br>
+            3. Once uploaded tap the image → copy the direct <strong>.jpg link</strong><br>
+            4. Paste above &amp; select Photo<br><br>
+            <strong style="color:var(--gold-dim);">🎬 VIDEOS — use YouTube Unlisted:</strong><br>
+            1. Open YouTube app → tap + → upload video<br>
+            2. Set visibility to <strong>Unlisted</strong><br>
+            3. Copy the <strong>youtu.be</strong> link<br>
+            4. Paste above &amp; select Video
+          </p>
+        </div>
         <div style="margin-top:0.8rem;padding:0.7rem;background:rgba(201,168,76,0.05);border:1px solid var(--border);font-size:0.8rem;color:var(--text-dim);line-height:1.6;">
           <strong style="color:var(--gold-dim);font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.15em;text-transform:uppercase;">How to share from Google Drive:</strong><br/>
           Open Google Drive → tap file → Share → Change to "Anyone with the link" → Copy link → paste above
@@ -669,8 +684,15 @@ function renderGallery() {
 
   // Media
   let mediaHTML = "";
-  // All Google Drive items use iframe embed (works for both photos and videos)
-  mediaHTML = `<iframe src="${item.url}" style="width:100%;height:70vw;max-height:500px;min-height:280px;border:none;background:#000;" allowfullscreen allow="autoplay"></iframe>`;
+  if (item.type === "photo") {
+    mediaHTML = `<img src="${item.url}" alt="${esc(item.caption||"Photo")}"
+      style="max-width:100%;max-height:75vh;object-fit:contain;display:block;margin:0 auto;"
+      onerror="this.outerHTML='<p style=color:var(--text-dim);font-style:italic;padding:2rem;>Could not load image — check the link is a direct image URL</p>'"/>`;
+  } else {
+    mediaHTML = `<iframe src="${item.url}"
+      style="width:100%;height:56vw;max-height:420px;min-height:220px;border:none;background:#000;"
+      allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
+  }
 
   const delBtn = isAdmin
     ? `<button class="admin-del-btn show" onclick="deleteGalleryItem('${item.id}')">✕ Delete</button>`
@@ -749,19 +771,46 @@ window.addGalleryLink = async function() {
 };
 
 function convertDriveLink(link, type) {
-  let fileId = null;
-  const patterns = [
-    /\/file\/d\/([a-zA-Z0-9_-]+)/,
-    /id=([a-zA-Z0-9_-]+)/,
-    /\/d\/([a-zA-Z0-9_-]+)/
-  ];
-  for (const p of patterns) {
-    const m = link.match(p);
-    if (m) { fileId = m[1]; break; }
+  // YouTube video links
+  if (type === "video") {
+    let videoId = null;
+    const ytPatterns = [
+      /youtu\.be\/([a-zA-Z0-9_-]+)/,
+      /youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/,
+      /youtube\.com\/embed\/([a-zA-Z0-9_-]+)/
+    ];
+    for (const p of ytPatterns) {
+      const m = link.match(p);
+      if (m) { videoId = m[1]; break; }
+    }
+    if (!videoId) return null;
+    return `https://www.youtube.com/embed/${videoId}`;
   }
-  if (!fileId) return null;
-  // Both photos and videos use the preview iframe embed
-  return `https://drive.google.com/file/d/${fileId}/preview`;
+
+  // Photo links — Imgur, direct image links
+  // If it already ends in an image extension, use directly
+  if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(link)) return link;
+
+  // Imgur page link → convert to direct image
+  const imgurPage = link.match(/imgur\.com\/([a-zA-Z0-9]+)$/);
+  if (imgurPage) return `https://i.imgur.com/${imgurPage[1]}.jpg`;
+
+  // Imgur album/gallery
+  const imgurGallery = link.match(/imgur\.com\/(?:gallery|a)\/([a-zA-Z0-9]+)/);
+  if (imgurGallery) return `https://i.imgur.com/${imgurGallery[1]}.jpg`;
+
+  // Google Drive fallback
+  const drivePatterns = [
+    /\/file\/d\/([a-zA-Z0-9_-]+)/,
+    /id=([a-zA-Z0-9_-]+)/
+  ];
+  for (const p of drivePatterns) {
+    const m = link.match(p);
+    if (m) return `https://drive.google.com/file/d/${m[1]}/preview`;
+  }
+
+  // Use link as-is if nothing matched
+  return link;
 }
 
 window.deleteGalleryItem = async function(docId) {
